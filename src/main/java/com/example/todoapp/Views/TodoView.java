@@ -9,6 +9,7 @@ import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.combobox.ComboBox;
+import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -17,6 +18,7 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Route("")
@@ -28,37 +30,51 @@ public class TodoView extends VerticalLayout {
     private final VerticalLayout todosLayout = new VerticalLayout();
     private final ComboBox<Persona> personaCombo = new ComboBox<>();
 
-    @Autowired
     public TodoView(TodoRepo todoRepo, PersonaRepo personaRepo) {
         this.todoRepo = todoRepo;
         this.personaRepo = personaRepo;
 
         TextField taskField = new TextField();
+        DatePicker fechaDeseadaPicker = new DatePicker("Fecha deseada");
+        fechaDeseadaPicker.setEnabled(false);
+
         Button addButton = new Button("Add");
         Button goToPersonas = new Button("Ir a Personas");
-
-        // Navegación
-        goToPersonas.addClickListener(e -> UI.getCurrent().navigate("personas"));
 
         personaCombo.setItems(personaRepo.findAll());
         personaCombo.setItemLabelGenerator(p -> p.getNombre() + " " + p.getApellido());
         personaCombo.addValueChangeListener(e -> actualizarTareas());
 
+        taskField.addValueChangeListener(e -> {
+            fechaDeseadaPicker.setEnabled(!taskField.isEmpty());
+        });
+
+        goToPersonas.addClickListener(e -> UI.getCurrent().navigate("personas"));
+
         addButton.addClickListener(click -> {
             Persona selectedPersona = personaCombo.getValue();
-            if (selectedPersona != null && !taskField.isEmpty()) {
-                Todo todo = new Todo(taskField.getValue());
+            String taskText = taskField.getValue();
+            LocalDate fechaDeseada = fechaDeseadaPicker.getValue();
+
+            if (selectedPersona != null && !taskText.isEmpty() && fechaDeseada != null) {
+                Todo todo = new Todo(taskText);
+                todo.setFechaDeseada(fechaDeseada);
                 todo.setPersona(selectedPersona);
-                todo = todoRepo.save(todo);
+                todoRepo.save(todo);
                 taskField.clear();
-                actualizarTareas(); // actualizamos la lista
+                fechaDeseadaPicker.clear();
+                fechaDeseadaPicker.setEnabled(false);
+                actualizarTareas();
             }
         });
+
+        HorizontalLayout formLayout = new HorizontalLayout(taskField, fechaDeseadaPicker, addButton);
+        formLayout.setAlignItems(Alignment.END);
 
         add(
                 new H1("Todo"),
                 new HorizontalLayout(personaCombo, goToPersonas),
-                new HorizontalLayout(taskField, addButton),
+                formLayout,
                 todosLayout
         );
 
@@ -69,25 +85,46 @@ public class TodoView extends VerticalLayout {
         todosLayout.removeAll();
         Persona seleccionada = personaCombo.getValue();
 
-        if (seleccionada == null) {
-            // No hay selección, no mostramos nada
-            return;
-        }
+        if (seleccionada == null) return;
 
-        List<Todo> tareas = todoRepo.findAll().stream()
+        todoRepo.findAll().stream()
                 .filter(t -> seleccionada.equals(t.getPersona()))
-                .toList();
-
-        tareas.forEach(todo -> todosLayout.add(createCheckbox(todo)));
+                .forEach(todo -> todosLayout.add(createCheckbox(todo)));
     }
 
     private Component createCheckbox(Todo todo) {
-        Checkbox checkbox = new Checkbox(todo.getTask(), todo.isDone(), e -> {
+        Checkbox checkbox = new Checkbox(todo.getTask(), todo.isDone());
+        checkbox.addValueChangeListener(e -> {
             todo.setDone(e.getValue());
             todoRepo.save(todo);
         });
 
+        // Info de fechas
+        Span fechas = new Span("(Creado: " + todo.getFechaCreacion() +
+                ", Deseado: " + todo.getFechaDeseada() + ")");
 
-        return new HorizontalLayout(checkbox);
+        // Botón eliminar
+        Button deleteBtn = new Button("❌", e -> {
+            Persona persona = todo.getPersona();
+            if (persona != null) {
+                persona.getTareas().remove(todo); // Borra la relación
+                personaRepo.save(persona);        // Guarda el cambio (cascada)
+            }
+            todoRepo.delete(todo); // Elimina la tarea
+            actualizarTareas();    // Refresca la vista
+        });
+        deleteBtn.getStyle().set("color", "darkred");
+
+        // Contenedor de todo
+        HorizontalLayout layout = new HorizontalLayout(checkbox, fechas, deleteBtn);
+        layout.setAlignItems(Alignment.CENTER);
+
+        // Resaltar si está vencido
+        if (todo.getFechaDeseada() != null && todo.getFechaDeseada().isBefore(LocalDate.now())) {
+            layout.getStyle().set("background-color", "#ffd6d6"); // Rojo clarito
+            layout.getStyle().set("border-radius", "10px");
+        }
+
+        return layout;
     }
 }

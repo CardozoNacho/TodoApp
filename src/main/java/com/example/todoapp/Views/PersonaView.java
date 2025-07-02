@@ -5,6 +5,7 @@ import com.example.todoapp.repository.PersonaRepo;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.grid.GridVariant;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -29,17 +30,24 @@ public class PersonaView extends VerticalLayout {
     public PersonaView(PersonaRepo repo) {
         this.repo = repo;
 
+        grid.removeAllColumns(); // Limpia las columnas por defecto
+        grid.addColumn(Persona::getDni).setHeader("DNI");
+        grid.addColumn(Persona::getNombre).setHeader("Nombre");
+        grid.addColumn(Persona::getApellido).setHeader("Apellido");
+        grid.addColumn(Persona::getEdad).setHeader("Edad");
+        grid.addColumn(persona -> persona.getTareas() != null ? persona.getTareas().size() : 0)
+                .setHeader("Tareas");
 
-        grid.setColumns("id", "dni", "nombre", "apellido", "edad");
+        grid.addComponentColumn(persona -> {
+            Button eliminar = new Button("Eliminar", e -> {
+                repo.delete(persona);
+                grid.setItems(repo.findAll());
+            });
+            return eliminar;
+        }).setHeader("Acciones");
 
-        grid.addColumn(persona -> {
-            if (persona.getTareas() != null) {
-                return persona.getTareas().size();
-            } else {
-                return 0;
-            }
-        }).setHeader("Tareas");
         grid.setItems(repo.findAll());
+        grid.addThemeVariants(GridVariant.LUMO_ROW_STRIPES);
 
         guardar.addClickListener(click -> {
             Persona p = new Persona();

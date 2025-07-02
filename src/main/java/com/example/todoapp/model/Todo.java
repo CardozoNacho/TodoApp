@@ -9,20 +9,29 @@ import lombok.NoArgsConstructor;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.JoinColumn;
 
+import java.time.LocalDate;
+
 @Data
 @Entity
 @NoArgsConstructor
 public class Todo {
+
     @ManyToOne
-    @JoinColumn(name = "persona_id")
+    @JoinColumn(name = "persona_dni") // Cambia porque la PK ahora es dni
     private Persona persona;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
+
     private String task;
     private boolean done;
-    public Todo(String task){
-        this.task = task;
-    }
 
+    private LocalDate fechaCreacion;
+    private LocalDate fechaDeseada;
+
+    public Todo(String task) {
+        this.task = task;
+        this.fechaCreacion = LocalDate.now();
+    }
 }
